@@ -1,0 +1,65 @@
+name: Build & Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. 2.7.4-toc1)'
+        required: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Package
+        run: |
+          mkdir -p /tmp/appointments
+          rsync -a --exclude='.git' \
+                   --exclude='.github' \
+                   --exclude='node_modules' \
+                   --exclude='src' \
+                   --exclude='tests' \
+                   --exclude='build' \
+                   --exclude='screenshots' \
+                   --exclude='*.config.js' \
+                   --exclude='babel.config.js' \
+                   --exclude='package*.json' \
+                   --exclude='composer*.json' \
+                   --exclude='phpunit*.xml' \
+                   --exclude='.travis.yml' \
+                   --exclude='.editorconfig' \
+                   --exclude='.gitignore' \
+                   --exclude='.l10nignore' \
+                   ./ /tmp/appointments/
+          cd /tmp && tar -czf appointments-${{ github.event.inputs.version }}.tar.gz appointments/
+          echo "TARBALL=/tmp/appointments-${{ github.event.inputs.version }}.tar.gz" >> $GITHUB_ENV
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.event.inputs.version }}
+          name: v${{ github.event.inputs.version }}
+          body: |
+            Built from `master` — includes per-brand theming and removed page/duration limits.
+
+            **Install**: extract into Nextcloud `custom_apps/appointments/` or use in a Docker image:
+            ```dockerfile
+            ADD https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/appointments-${{ github.event.inputs.version }}.tar.gz /tmp/appt.tar.gz
+            RUN tar -xzf /tmp/appt.tar.gz -C /var/www/html/custom_apps/ && rm /tmp/appt.tar.gz
+            ```
+          files: ${{ env.TARBALL }}
+          draft: false
+          prerelease: false
