@@ -1,0 +1,110 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*-branding.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)build, e.g. v2.8.8-branding.5"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          fetch-depth: 0
+
+      - name: Parse tag
+        id: tag
+        run: |
+          if [[ ! "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)-branding\.([0-9]+)$ ]]; then
+            echo "::error::tag $TAG does not match vX.Y.Z-branding.N"; exit 1
+          fi
+          version="${BASH_REMATCH[1]}"
+          {
+            echo "version=$version"
+            echo "name=appointments-${TAG#v}"
+            echo "mtime=$(git log -1 --format=%ct)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check appinfo version
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          app_version=$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' appinfo/info.xml | head -1)
+          if [ "$app_version" != "$VERSION" ]; then
+            echo "::error::appinfo/info.xml version $app_version != tag version $VERSION"; exit 1
+          fi
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: "8.2"
+          tools: none
+          coverage: none
+
+      - name: PHP lint
+        run: find lib templates -name '*.php' -print0 | xargs -0 -n1 -P4 php -l >/dev/null
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: make build-prod
+
+      - name: Package
+        id: pkg
+        env:
+          NAME: ${{ steps.tag.outputs.name }}
+          MTIME: ${{ steps.tag.outputs.mtime }}
+        run: |
+          stage=$(mktemp -d)
+          mkdir "$stage/appointments"
+          cp -a l10n lib img js templates css appinfo ajax COPYING CHANGELOG.md "$stage/appointments/"
+          tar -C "$stage" --sort=name --owner=0 --group=0 --numeric-owner --mtime="@$MTIME" \
+            -cf - appointments | gzip -9n > "$NAME.tar.gz"
+          sha256sum "$NAME.tar.gz" > "$NAME.tar.gz.sha256"
+          echo "sha=$(cut -d' ' -f1 "$NAME.tar.gz.sha256")" >> "$GITHUB_OUTPUT"
+          tar tzf "$NAME.tar.gz" | head -50
+
+      - name: Create release
+        env:
+          NAME: ${{ steps.tag.outputs.name }}
+          SHA: ${{ steps.pkg.outputs.sha }}
+        run: |
+          git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+          if [ "$(git cat-file -t "$TAG")" = "tag" ]; then
+            msg=$(git tag -l --format='%(contents)' "$TAG" | sed '/^-----BEGIN PGP SIGNATURE-----/,$d')
+          fi
+          [ -n "${msg:-}" ] || msg="Appointments ${TAG#v} built from tag $TAG."
+          printf '%s\n\nsha256 %s\n' "$msg" "$SHA" > notes.md
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes-file notes.md
+            gh release upload "$TAG" "$NAME.tar.gz" "$NAME.tar.gz.sha256" --clobber
+          else
+            gh release create "$TAG" --verify-tag --title "${TAG#v}" --notes-file notes.md \
+              "$NAME.tar.gz" "$NAME.tar.gz.sha256"
+          fi
