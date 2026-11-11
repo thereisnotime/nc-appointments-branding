@@ -16,6 +16,9 @@ style('appointments', 'form');
 <?php if (!empty($_['appt_brand']['customJs'])): ?>
 <script nonce="<?php p($_['cspNonce']); ?>"><?php echo $_['appt_brand']['customJs']; ?></script>
 <?php endif; ?>
+<?php if (!empty($_['appt_analytics'])): ?>
+<?php print_unescaped($this->inc('public/analytics', ['appt_analytics' => $_['appt_analytics']])); ?>
+<?php endif; ?>
 
 <div class="srgdev-ncfp-wrap">
     <?php
