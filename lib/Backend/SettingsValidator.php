@@ -98,6 +98,16 @@ class SettingsValidator
                 return [Http::STATUS_OK, ''];
             },
 
+            BackendUtils::EML_LINK_BASE => function ($value, $pageId, $key): array {
+                if ($value !== '' && (preg_match('#^https://[a-z0-9.-]+(:\d+)?/?$#i', $value) !== 1)) {
+                    return [Http::STATUS_ACCEPTED, json_encode([
+                        "type" => 3,
+                        "message" => $this->l->t("Enter a base URL like https://book.example.com or leave empty.")
+                    ])];
+                }
+                return [Http::STATUS_OK, ''];
+            },
+
             BackendUtils::EML_LOGO_BG => function ($value, $pageId, $key): array {
                 if ($value !== '' && preg_match('/^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/', $value) !== 1) {
                     return [Http::STATUS_ACCEPTED, json_encode([

@@ -105,6 +105,9 @@ class BackendUtils
     // empty = server theming. When the logo is set the footer names the organization.
     public const EML_LOGO_URL = 'emlLogoUrl';
     public const EML_LOGO_BG = 'emlLogoBg';
+    // Base URL for links in this page's emails (e.g. https://book.example.com) when the
+    // page is served on its own domain, empty = the server's URL
+    public const EML_LINK_BASE = 'emlLinkBase';
 
     // Analytics (public form and its finish page)
     public const ANA_GTM_ID = 'anaGtmId';
@@ -1244,6 +1247,7 @@ class BackendUtils
             self::EML_FROM => "",
             self::EML_LOGO_URL => "",
             self::EML_LOGO_BG => "",
+            self::EML_LINK_BASE => "",
 
             self::ANA_GTM_ID => "",
             self::ANA_GA4_ID => "",
@@ -2181,6 +2185,10 @@ class BackendUtils
 
     function getPublicWebBase(): string
     {
+        $base = rtrim(trim($this->settings[self::EML_LINK_BASE] ?? ''), '/');
+        if ($base !== '') {
+            return $base . '/apps/' . Application::APP_ID;
+        }
         // we need to detect if the server is configured to use '.../index.php/...'
         $defaultUrl = $this->urlGenerator->linkToDefaultPageUrl();
         return substr($defaultUrl, 0, strpos($defaultUrl, '/apps/') + 6) . Application::APP_ID;
