@@ -59,6 +59,33 @@ const cancelPendingOptions = [
 				{{ t('appointments', 'These addresses get a copy of every email sent to the attendee (booking, confirmation, cancellation). The attendee can see them. Separate multiple addresses with commas.') }}
 			</template>
 		</ComboInput>
+		<ComboInput
+				class="ps-vert-spacing"
+				prop-name="emlFrom"
+				:placeholder="t('appointments', 'noreply@example.com')"
+				:label="t('appointments', 'Send emails from')"
+				:store="settingsStore">
+			<template #help>
+				{{ t('appointments', 'Sender address for this page\'s emails. Leave empty to use the server default. The mail server must allow sending from this address.') }}
+			</template>
+		</ComboInput>
+		<ComboInput
+				class="ps-vert-spacing"
+				prop-name="emlLogoUrl"
+				:placeholder="t('appointments', 'https://example.com/logo.png')"
+				:label="t('appointments', 'Email logo')"
+				:store="settingsStore">
+			<template #help>
+				{{ t('appointments', 'PNG or JPG shown at the top of attendee emails instead of the server logo. The email footer then shows the organization name. Leave empty for the server default.') }}
+			</template>
+		</ComboInput>
+		<ComboInput
+				class="ps-vert-spacing"
+				prop-name="emlLogoBg"
+				:placeholder="t('appointments', '#ffffff')"
+				:label="t('appointments', 'Email logo background colour')"
+				:store="settingsStore">
+		</ComboInput>
 		<LabelAccordion
 				:label="t('appointments','Email Attendee when the appointment is:')">
 			<template #helpPopover>

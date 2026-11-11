@@ -99,6 +99,12 @@ class BackendUtils
     // Comma separated addresses copied (Cc) on the attendee's emails
     public const EML_ATT_CC = 'attCc';
     public const EML_ATT_CC_MAX = 10;
+    // Sender (From) address for this page's emails, empty = global setting
+    public const EML_FROM = 'emlFrom';
+    // Email header logo (absolute https URL to a PNG/JPG) and its background colour,
+    // empty = server theming. When the logo is set the footer names the organization.
+    public const EML_LOGO_URL = 'emlLogoUrl';
+    public const EML_LOGO_BG = 'emlLogoBg';
 
     // Analytics (public form and its finish page)
     public const ANA_GTM_ID = 'anaGtmId';
@@ -1235,6 +1241,9 @@ class BackendUtils
             self::EML_CANCEL_PENDING_HOURS => 0,
             self::EML_NOTIFY_BEFORE_CANCEL_PENDING => false,
             self::EML_ATT_CC => "",
+            self::EML_FROM => "",
+            self::EML_LOGO_URL => "",
+            self::EML_LOGO_BG => "",
 
             self::ANA_GTM_ID => "",
             self::ANA_GA4_ID => "",

@@ -78,6 +78,36 @@ class SettingsValidator
                 return [Http::STATUS_OK, ''];
             },
 
+            BackendUtils::EML_FROM => function ($value, $pageId, $key): array {
+                if ($value !== '' && filter_var($value, FILTER_VALIDATE_EMAIL) === false) {
+                    return [Http::STATUS_ACCEPTED, json_encode([
+                        "type" => 3,
+                        "message" => $this->l->t("Enter a valid email address or leave empty.")
+                    ])];
+                }
+                return [Http::STATUS_OK, ''];
+            },
+
+            BackendUtils::EML_LOGO_URL => function ($value, $pageId, $key): array {
+                if ($value !== '' && (filter_var($value, FILTER_VALIDATE_URL) === false || !str_starts_with($value, 'https://'))) {
+                    return [Http::STATUS_ACCEPTED, json_encode([
+                        "type" => 3,
+                        "message" => $this->l->t("Enter an https:// image URL or leave empty.")
+                    ])];
+                }
+                return [Http::STATUS_OK, ''];
+            },
+
+            BackendUtils::EML_LOGO_BG => function ($value, $pageId, $key): array {
+                if ($value !== '' && preg_match('/^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/', $value) !== 1) {
+                    return [Http::STATUS_ACCEPTED, json_encode([
+                        "type" => 3,
+                        "message" => $this->l->t("Enter a colour like #1a2b3c or leave empty.")
+                    ])];
+                }
+                return [Http::STATUS_OK, ''];
+            },
+
             BackendUtils::ANA_GTM_ID,
             BackendUtils::ANA_GA4_ID,
             BackendUtils::ANA_CLARITY_ID,

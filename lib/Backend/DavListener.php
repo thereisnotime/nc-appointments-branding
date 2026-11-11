@@ -490,10 +490,10 @@ class DavListener implements IEventListener
 
             $msg = $mailer->createMessage();
 
-            $this->setFromAddress($msg, $userId, $org_email, $org_name);
+            $this->setFromAddress($msg, $userId, $org_email, $org_name, $settings);
 
             $msg->setTo(array($to_email));
-            $msg->useTemplate($tmpl);
+            $this->useBrandedTemplate($msg, $tmpl, $settings);
 
             $description = '';
 
@@ -1123,7 +1123,7 @@ class DavListener implements IEventListener
             );
             $plainText = strip_tags($customHtml);
             $msg = $mailer->createMessage();
-            $this->setFromAddress($msg, $userId, $org_email, $org_name);
+            $this->setFromAddress($msg, $userId, $org_email, $org_name, $settings);
             $msg->setTo([$to_email]);
             $this->addAttendeeCc($msg, $settings, $to_email);
             $msg->setHtmlBody($customHtml);
@@ -1142,11 +1142,11 @@ class DavListener implements IEventListener
 
         $msg = $mailer->createMessage();
 
-        $this->setFromAddress($msg, $userId, $org_email, $org_name);
+        $this->setFromAddress($msg, $userId, $org_email, $org_name, $settings);
 
         $msg->setTo(array($to_email));
         $this->addAttendeeCc($msg, $settings, $to_email);
-        $msg->useTemplate($tmpl);
+        $this->useBrandedTemplate($msg, $tmpl, $settings);
 
         if ($doc) {
             $utz_info = $doc->attendeeTimezone[0];
@@ -1568,6 +1568,11 @@ class DavListener implements IEventListener
             ]));
         }
 
+        $settings = $this->utils->getUserSettings();
+        if (($settings[BackendUtils::EML_LOGO_URL] ?? '') !== '' && trim($settings[BackendUtils::ORG_NAME] ?? '') !== '') {
+            $tmpl->addFooter(htmlspecialchars(trim($settings[BackendUtils::ORG_NAME]), ENT_QUOTES));
+            return;
+        }
         $theme = new \OCP\Defaults();
         // TRANSLATORS %s is the server name. Example: Booked via Private Cloud Appointments
         $tmpl->addFooter($this->l10N->t("Booked via %s Appointments", [$theme->getEntity()]));
@@ -1704,9 +1709,40 @@ class DavListener implements IEventListener
         }
     }
 
-    private function setFromAddress($msg, $userId, $org_email, $org_name)
+    /**
+     * Attach the template to the message. With a page email logo the server
+     * theming logo, its colour and name in the header are swapped for the page's.
+     */
+    private function useBrandedTemplate($msg, $tmpl, array $settings): void
     {
-        if ($this->appConfig->getValueString(Application::APP_ID,
+        $logo = trim($settings[BackendUtils::EML_LOGO_URL] ?? '');
+        if ($logo === '') {
+            $msg->useTemplate($tmpl);
+            return;
+        }
+        $alt = htmlspecialchars(trim($settings[BackendUtils::ORG_NAME] ?? ''), ENT_QUOTES);
+        $html = preg_replace(
+            '/(<img class="logo float-center" )src="[^"]*" alt="[^"]*"/',
+            '$1src="' . htmlspecialchars($logo, ENT_QUOTES) . '" alt="' . $alt . '"',
+            $tmpl->renderHtml(), 1);
+        $bg = trim($settings[BackendUtils::EML_LOGO_BG] ?? '');
+        if ($bg !== '') {
+            $html = preg_replace('/(<center data-parsed="" style="background-color:)[^;]*;/', '${1}' . $bg . ';', $html, 1);
+        }
+        $msg->setSubject($tmpl->renderSubject());
+        $msg->setHtmlBody($html);
+        $msg->setPlainBody($tmpl->renderText());
+    }
+
+    private function setFromAddress($msg, $userId, $org_email, $org_name, array $settings = [])
+    {
+        $pageFrom = trim($settings[BackendUtils::EML_FROM] ?? '');
+        if ($pageFrom !== '' && filter_var($pageFrom, FILTER_VALIDATE_EMAIL) !== false) {
+            $email = $pageFrom;
+            if (!empty($org_email) && strcasecmp($org_email, $pageFrom) !== 0) {
+                $msg->setReplyTo(array($org_email));
+            }
+        } elseif ($this->appConfig->getValueString(Application::APP_ID,
                 BackendUtils::KEY_USE_DEF_EMAIL,
                 'yes') === 'no') {
             $email = $org_email;
