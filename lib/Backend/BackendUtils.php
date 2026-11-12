@@ -105,6 +105,9 @@ class BackendUtils
     public const EML_ATT_CC_MODES = ['cc', 'bcc', 'separate'];
     // Sender (From) address for this page's emails, empty = global setting
     public const EML_FROM = 'emlFrom';
+    // Contact address written in attendee emails ("please write to ..."),
+    // empty = the organization email. Reply-To and organizer stay on that one.
+    public const EML_CONTACT = 'emlContact';
     // Webhook: POST a JSON event to this https URL whenever an appointment of the
     // page is booked, confirmed, canceled or changed (DavListener::sendWebhook)
     public const WH_URL = 'whUrl';
@@ -1257,6 +1260,7 @@ class BackendUtils
             self::EML_ATT_CC => "",
             self::EML_ATT_CC_MODE => "cc",
             self::EML_FROM => "",
+            self::EML_CONTACT => "",
             self::WH_URL => "",
             self::WH_SECRET => "",
             self::EML_LOGO_URL => "",

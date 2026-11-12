@@ -89,6 +89,16 @@ const cancelPendingOptions = [
 		</ComboInput>
 		<ComboInput
 				class="ps-vert-spacing"
+				prop-name="emlContact"
+				:placeholder="t('appointments', 'office@example.com')"
+				:label="t('appointments', 'Contact email shown to attendees')"
+				:store="settingsStore">
+			<template #help>
+				{{ t('appointments', 'The address attendee emails ask people to write to, for example to reschedule. Leave empty to use the organization email. Replies still go to the organization email.') }}
+			</template>
+		</ComboInput>
+		<ComboInput
+				class="ps-vert-spacing"
 				prop-name="emlLogoUrl"
 				:placeholder="t('appointments', 'https://example.com/logo.png')"
 				:label="t('appointments', 'Email logo')"

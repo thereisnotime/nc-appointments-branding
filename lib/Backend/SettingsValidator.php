@@ -95,6 +95,16 @@ class SettingsValidator
                 return [Http::STATUS_OK, ''];
             },
 
+            BackendUtils::EML_CONTACT => function ($value, $pageId, $key): array {
+                if ($value !== '' && filter_var($value, FILTER_VALIDATE_EMAIL) === false) {
+                    return [Http::STATUS_ACCEPTED, json_encode([
+                        "type" => 3,
+                        "message" => $this->l->t("Enter a valid email address or leave empty.")
+                    ])];
+                }
+                return [Http::STATUS_OK, ''];
+            },
+
             BackendUtils::EML_FROM => function ($value, $pageId, $key): array {
                 if ($value !== '' && filter_var($value, FILTER_VALIDATE_EMAIL) === false) {
                     return [Http::STATUS_ACCEPTED, json_encode([

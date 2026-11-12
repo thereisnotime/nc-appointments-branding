@@ -417,7 +417,7 @@ class DavListener implements IEventListener
                         // TRANSLATORS Main part of email (if organization phone number is provided), Ex: This is a reminder from {{Organization Name}} about your upcoming appointment on {{Date And Time}}. If you need to reschedule, please call {{Organization Phone}}.
                         ? $this->l10N->t('This is a reminder from %1$s about your upcoming appointment on %2$s. If you need to reschedule, please call %3$s.', [$org_name, $date_time, $org_phone])
                         // TRANSLATORS Main part of email (if organization phone number is missing), Ex: This is a reminder from {{Organization Name}} about your upcoming appointment on {{Date And Time}}. If you need to reschedule, please write to {{Organization Email}}.
-                        : $this->l10N->t('This is a reminder from %1$s about your upcoming appointment on %2$s. If you need to reschedule, please write to %3$s.', [$org_name, $date_time, $org_email])
+                        : $this->l10N->t('This is a reminder from %1$s about your upcoming appointment on %2$s. If you need to reschedule, please write to %3$s.', [$org_name, $date_time, $this->contactEmail($settings, $org_email)])
                 ]));
             }
 
@@ -1067,12 +1067,12 @@ class DavListener implements IEventListener
             if (empty($org_phone)) {
                 $tmpl->addBodyText(...$this->formatEmailBodyHtml([
                     // TRANSLATORS Additional part of email - contact information WITHOUT phone number (only email). The last argument is email address.
-                    $this->l10N->t("If you have any questions please write to %s", [$org_email])
+                    $this->l10N->t("If you have any questions please write to %s", [$this->contactEmail($settings, $org_email)])
                 ]));
             } else {
                 $tmpl->addBodyText(...$this->formatEmailBodyHtml([
                     // TRANSLATORS Additional part of email - contact information WITH email AND phone number: If you have any questions please feel free to call {123-456-7890} or write to {email@example.com}
-                    $this->l10N->t('If you have any questions please feel free to call %1$s or write to %2$s', [$org_phone, $org_email])
+                    $this->l10N->t('If you have any questions please feel free to call %1$s or write to %2$s', [$org_phone, $this->contactEmail($settings, $org_email)])
                 ]));
             }
 
@@ -1564,6 +1564,13 @@ class DavListener implements IEventListener
         $phone = $settings[BackendUtils::ORG_PHONE];
 
         return [$email, $name, $phone];
+    }
+
+    /** Address attendees are told to write to: the page's contact email, else the organization email. */
+    private function contactEmail(array $settings, string $org_email): string
+    {
+        $contact = trim($settings[BackendUtils::EML_CONTACT] ?? '');
+        return $contact !== '' ? $contact : $org_email;
     }
 
 
