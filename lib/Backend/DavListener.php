@@ -1087,6 +1087,7 @@ class DavListener implements IEventListener
             if (($settings[BackendUtils::EML_ADEL] === false && $isDelete)
                 || ($settings[BackendUtils::EML_AMOD] === false && $isDelete)) {
                 // no need to go further if we don want to email attendees on change
+                $this->sendWebhook($settings, $pageId, $hint, $isDelete, $evt, $doc, $utz, $to_name, $to_email, $om_info);
                 return;
             }
 
@@ -1116,6 +1117,8 @@ class DavListener implements IEventListener
             // end: translate for before release
             return;
         }
+
+        $this->sendWebhook($settings, $pageId, $hint, $isDelete, $evt, $doc, $utz, $to_name, $to_email, $om_info);
 
         if (!empty($brand[BackendUtils::BRAND_EMAIL_TEMPLATE])) {
             $customHtml = str_replace(
@@ -1771,6 +1774,93 @@ class DavListener implements IEventListener
             $tmpl->addBodyListItem(...$this->formatEmailListItem($l10n->t('Browser: %s', [$doc->userAgent])));
         }
         return $tmpl;
+    }
+
+    /**
+     * POST the change to the page's webhook (whUrl), if one is set, as JSON:
+     * event (appointment.pending|confirmed|canceled|updated|changed), the
+     * appointment, the attendee, every form answer and where the booking came
+     * from. With whSecret the body is signed: X-Appointments-Signature is
+     * "sha256=" + hex HMAC-SHA256 of the raw body. One attempt, 5 s timeout;
+     * a failure is logged and never stops the emails.
+     */
+    private function sendWebhook(array $settings, string $pageId, int $hint, bool $isDelete, $evt, ?ApptDocProp $doc, \DateTimeZone $utz, string $to_name, string $to_email, string $info): void
+    {
+        $url = trim($settings[BackendUtils::WH_URL] ?? '');
+        if ($url === '' || !str_starts_with($url, 'https://')) {
+            return;
+        }
+        try {
+            if ($hint === HintVar::APPT_BOOK) {
+                $event = 'pending';
+            } elseif ($hint === HintVar::APPT_CONFIRM) {
+                $event = 'confirmed';
+            } elseif ($hint === HintVar::APPT_CANCEL || $hint === HintVar::APPT_AUTO_CANCELL || $isDelete) {
+                $event = 'canceled';
+            } elseif ($hint === HintVar::APPT_TYPE_CHANGE) {
+                $event = 'updated';
+            } else {
+                $event = 'changed';
+            }
+            $lines = array_values(array_filter(array_map('trim', explode("\n", $info)), fn($l) => $l !== ''));
+            $fields = [];
+            foreach ($lines as $line) {
+                if (preg_match('/^([^:]{1,64}):\s*(.*)$/u', $line, $m) === 1) {
+                    $fields[trim($m[1])] = $m[2];
+                }
+            }
+            $iso = fn($p) => isset($evt->{$p}) ? $evt->{$p}->getDateTime()->setTimezone($utz)->format(DATE_ATOM) : null;
+            $payload = [
+                'event' => 'appointment.' . $event,
+                'sentAt' => (new \DateTimeImmutable('now', $utz))->format(DATE_ATOM),
+                'page' => [
+                    'id' => $pageId,
+                    'label' => $settings[BackendUtils::PAGE_LABEL] ?? '',
+                    'organization' => $settings[BackendUtils::ORG_NAME] ?? '',
+                ],
+                'appointment' => [
+                    'uid' => isset($evt->UID) ? $evt->UID->getValue() : '',
+                    'start' => $iso('DTSTART'),
+                    'end' => $iso('DTEND'),
+                    'timezone' => $utz->getName(),
+                    'status' => isset($evt->STATUS) ? $evt->STATUS->getValue() : '',
+                    'location' => isset($evt->LOCATION) ? $evt->LOCATION->getValue() : '',
+                ],
+                'attendee' => [
+                    'name' => $to_name,
+                    'email' => $to_email,
+                    'timezone' => $doc ? substr($doc->attendeeTimezone, 1) : '',
+                ],
+                'fields' => (object)$fields,
+                'details' => $lines,
+                'client' => [
+                    'ip' => $doc ? $doc->clientIp : '',
+                    'userAgent' => $doc ? $doc->userAgent : '',
+                ],
+            ];
+            $body = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+            $headers = [
+                'Content-Type' => 'application/json',
+                'User-Agent' => 'Nextcloud-Appointments-Webhook',
+                'X-Appointments-Event' => 'appointment.' . $event,
+            ];
+            $secret = $settings[BackendUtils::WH_SECRET] ?? '';
+            if (str_starts_with($secret, '::hsh2::')) {
+                $key = $this->utils->decrypt(substr($secret, 8), $this->utils->getLocalHash());
+                if ($key !== '') {
+                    $headers['X-Appointments-Signature'] = 'sha256=' . hash_hmac('sha256', $body, $key);
+                }
+            }
+            \OC::$server->get(\OCP\Http\Client\IClientService::class)->newClient()->post($url, [
+                'body' => $body,
+                'headers' => $headers,
+                'timeout' => 5,
+                'connect_timeout' => 3,
+                'nextcloud' => ['allow_local_address' => false],
+            ]);
+        } catch (\Throwable $e) {
+            $this->logger->warning("appointments: webhook to " . parse_url($url, PHP_URL_HOST) . " failed: " . $e->getMessage());
+        }
     }
 
     /** teamNoticeTemplate, but a failure is logged and never blocks the attendee's email. */

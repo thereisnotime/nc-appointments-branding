@@ -104,6 +104,27 @@ const cancelPendingOptions = [
 				:label="t('appointments', 'Email logo background colour')"
 				:store="settingsStore">
 		</ComboInput>
+		<ComboInput
+				class="ps-vert-spacing"
+				prop-name="whUrl"
+				:placeholder="t('appointments', 'https://crm.example.com/hooks/appointments')"
+				:label="t('appointments', 'Webhook URL')"
+				:store="settingsStore">
+			<template #help>
+				{{ t('appointments', 'Optional. Every time an appointment from this page is booked, confirmed, canceled or changed, a JSON event with the appointment, the attendee, all form answers and the booking IP is POSTed here, for example to a CRM. https only.') }}
+			</template>
+		</ComboInput>
+		<ComboInput
+				class="ps-vert-spacing"
+				prop-name="whSecret"
+				type="password"
+				:disabled="!settings.whUrl"
+				:label="t('appointments', 'Webhook signing secret')"
+				:store="settingsStore">
+			<template #help>
+				{{ t('appointments', 'Optional. When set, each request carries X-Appointments-Signature: sha256=<hex HMAC-SHA256 of the body> so the receiver can check it came from here.') }}
+			</template>
+		</ComboInput>
 		<LabelAccordion
 				:label="t('appointments','Email Attendee when the appointment is:')">
 			<template #helpPopover>

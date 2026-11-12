@@ -105,6 +105,11 @@ class BackendUtils
     public const EML_ATT_CC_MODES = ['cc', 'bcc', 'separate'];
     // Sender (From) address for this page's emails, empty = global setting
     public const EML_FROM = 'emlFrom';
+    // Webhook: POST a JSON event to this https URL whenever an appointment of the
+    // page is booked, confirmed, canceled or changed (DavListener::sendWebhook)
+    public const WH_URL = 'whUrl';
+    // HMAC-SHA256 key for the X-Appointments-Signature header; stored encrypted
+    public const WH_SECRET = 'whSecret';
     // Email header logo (absolute https URL to a PNG/JPG) and its background colour,
     // empty = server theming. When the logo is set the footer names the organization.
     public const EML_LOGO_URL = 'emlLogoUrl';
@@ -1252,6 +1257,8 @@ class BackendUtils
             self::EML_ATT_CC => "",
             self::EML_ATT_CC_MODE => "cc",
             self::EML_FROM => "",
+            self::WH_URL => "",
+            self::WH_SECRET => "",
             self::EML_LOGO_URL => "",
             self::EML_LOGO_BG => "",
             self::EML_LINK_BASE => "",
@@ -1735,7 +1742,7 @@ class BackendUtils
 
         if ($key === self::KEY_REMINDERS) {
             return $this->setUserReminders($userId, $pageId, $value);
-        } elseif ($key === self::SEC_HCAP_SECRET && !empty($value)) {
+        } elseif (($key === self::SEC_HCAP_SECRET || $key === self::WH_SECRET) && !empty($value)) {
             if (str_starts_with($value, '::hsh2::') // new GCM
                 || str_starts_with($value, '::hash::') // old CFB
             ) {
