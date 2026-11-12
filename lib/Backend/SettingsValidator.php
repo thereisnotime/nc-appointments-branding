@@ -78,6 +78,13 @@ class SettingsValidator
                 return [Http::STATUS_OK, ''];
             },
 
+            BackendUtils::EML_ATT_CC_MODE => function ($value, $pageId, $key): array {
+                if (!in_array($value, BackendUtils::EML_ATT_CC_MODES, true)) {
+                    return [Http::STATUS_BAD_REQUEST, ''];
+                }
+                return [Http::STATUS_OK, ''];
+            },
+
             BackendUtils::EML_FROM => function ($value, $pageId, $key): array {
                 if ($value !== '' && filter_var($value, FILTER_VALIDATE_EMAIL) === false) {
                     return [Http::STATUS_ACCEPTED, json_encode([

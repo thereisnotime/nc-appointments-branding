@@ -99,6 +99,10 @@ class BackendUtils
     // Comma separated addresses copied (Cc) on the attendee's emails
     public const EML_ATT_CC = 'attCc';
     public const EML_ATT_CC_MAX = 10;
+    // How the attCc addresses get their copy: cc (the attendee sees them), bcc
+    // (hidden) or separate (an email of their own; the attendee's has no copies)
+    public const EML_ATT_CC_MODE = 'attCcMode';
+    public const EML_ATT_CC_MODES = ['cc', 'bcc', 'separate'];
     // Sender (From) address for this page's emails, empty = global setting
     public const EML_FROM = 'emlFrom';
     // Email header logo (absolute https URL to a PNG/JPG) and its background colour,
@@ -1244,6 +1248,7 @@ class BackendUtils
             self::EML_CANCEL_PENDING_HOURS => 0,
             self::EML_NOTIFY_BEFORE_CANCEL_PENDING => false,
             self::EML_ATT_CC => "",
+            self::EML_ATT_CC_MODE => "cc",
             self::EML_FROM => "",
             self::EML_LOGO_URL => "",
             self::EML_LOGO_BG => "",

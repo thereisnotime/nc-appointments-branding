@@ -26,6 +26,12 @@ const contribInterceptor = () => {
 	return true
 }
 
+const attCcModeOptions = [
+	{value: 'cc', label: t('appointments', 'Cc (visible to the attendee)')},
+	{value: 'bcc', label: t('appointments', 'Bcc (hidden from the attendee)')},
+	{value: 'separate', label: t('appointments', 'Separate email')},
+]
+
 const cancelPendingOptions = [
 	{value: 0, label: t('appointments', 'No auto-cancel')},
 	{value: 2, label: t('appointments', '2 hours')},
@@ -56,9 +62,21 @@ const cancelPendingOptions = [
 				:label="t('appointments', 'Cc on attendee emails')"
 				:store="settingsStore">
 			<template #help>
-				{{ t('appointments', 'These addresses get a copy of every email sent to the attendee (booking, confirmation, cancellation). The attendee can see them. Separate multiple addresses with commas.') }}
+				{{ t('appointments', 'These addresses get a copy of every email sent to the attendee (booking, confirmation, cancellation). Separate multiple addresses with commas.') }}
 			</template>
 		</ComboInput>
+		<ComboSelect
+				v-if="settings.attCc"
+				class="ps-vert-spacing"
+				:label="t('appointments', 'Send the copies as')"
+				prop-name="attCcMode"
+				default-value="cc"
+				:options="attCcModeOptions"
+				:store="settingsStore">
+			<template #help>
+				{{ t('appointments', 'Cc: on the attendee\'s email, which shows these addresses. Bcc: on the attendee\'s email, hidden from the attendee. Separate email: each address gets its own copy and the attendee\'s email does not mention them.') }}
+			</template>
+		</ComboSelect>
 		<ComboInput
 				class="ps-vert-spacing"
 				prop-name="emlFrom"

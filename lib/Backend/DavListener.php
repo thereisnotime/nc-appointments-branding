@@ -1125,14 +1125,20 @@ class DavListener implements IEventListener
             $msg = $mailer->createMessage();
             $this->setFromAddress($msg, $userId, $org_email, $org_name, $settings);
             $msg->setTo([$to_email]);
-            $this->addAttendeeCc($msg, $settings, $to_email);
+            $copies = $this->addAttendeeCc($msg, $settings, $to_email);
             $msg->setHtmlBody($customHtml);
             $msg->setPlainTextBody($plainText);
             try {
                 $mailer->send($msg);
             } catch (\Exception $e) {
                 $this->logger->error("Can not send brand email to " . $to_email . ": " . $e->getMessage());
+                return;
             }
+            $this->sendAttendeeCopies($mailer, $copies, function ($copy) use ($userId, $org_email, $org_name, $settings, $customHtml, $plainText) {
+                $this->setFromAddress($copy, $userId, $org_email, $org_name, $settings);
+                $copy->setHtmlBody($customHtml);
+                $copy->setPlainTextBody($plainText);
+            });
             return;
         }
 
@@ -1145,8 +1151,9 @@ class DavListener implements IEventListener
         $this->setFromAddress($msg, $userId, $org_email, $org_name, $settings);
 
         $msg->setTo(array($to_email));
-        $this->addAttendeeCc($msg, $settings, $to_email);
+        $copies = $this->addAttendeeCc($msg, $settings, $to_email);
         $this->useBrandedTemplate($msg, $tmpl, $settings);
+        $ics = null;
 
         if ($doc) {
             $utz_info = $doc->attendeeTimezone[0];
@@ -1249,13 +1256,8 @@ class DavListener implements IEventListener
                 $evt->remove($evt->{ApptDocProp::PROP_NAME});
             }
 
-            $msg->attach(
-                $mailer->createAttachment(
-                    $vObject->serialize(),
-                    'appointment.ics',
-                    'text/calendar; method=' . $method
-                )
-            );
+            $ics = [$vObject->serialize(), 'text/calendar; method=' . $method];
+            $msg->attach($mailer->createAttachment($ics[0], 'appointment.ics', $ics[1]));
         }
 
         try {
@@ -1265,6 +1267,13 @@ class DavListener implements IEventListener
             $this->logger->error($e->getMessage());
             return;
         }
+        $this->sendAttendeeCopies($mailer, $copies, function ($copy) use ($mailer, $userId, $org_email, $org_name, $settings, $tmpl, $ics) {
+            $this->setFromAddress($copy, $userId, $org_email, $org_name, $settings);
+            $this->useBrandedTemplate($copy, $tmpl, $settings);
+            if ($ics !== null) {
+                $copy->attach($mailer->createAttachment($ics[0], 'appointment.ics', $ics[1]));
+            }
+        });
 
         // Email the Organizer
         if (!empty($om_prefix) && isset($om_info)) {
@@ -1688,24 +1697,59 @@ class DavListener implements IEventListener
      * @return void
      */
     /**
-     * Copy the page's attCc addresses on an attendee email. An invalid stored
-     * value (set before validation existed) is logged and skipped rather than
-     * blocking the attendee's email.
+     * Copy the page's attCc addresses on an attendee email, as Cc or Bcc per
+     * attCcMode. In "separate" mode nothing is added and the addresses are
+     * returned for sendAttendeeCopies; otherwise the result is empty. An invalid
+     * stored list (set before validation existed) is logged and skipped rather
+     * than blocking the attendee's email.
+     *
+     * @return string[]
      */
-    private function addAttendeeCc($msg, array $settings, string $to_email): void
+    private function addAttendeeCc($msg, array $settings, string $to_email): array
     {
         $raw = $settings[BackendUtils::EML_ATT_CC] ?? '';
         if (!is_string($raw) || trim($raw) === '') {
-            return;
+            return [];
         }
         $cc = BackendUtils::parseCcList($raw);
         if ($cc === null) {
             $this->logger->warning("appointments: ignoring invalid Cc list in page settings");
-            return;
+            return [];
         }
         $cc = array_values(array_filter($cc, fn($e) => strcasecmp($e, $to_email) !== 0));
-        if (!empty($cc)) {
-            $msg->setCc($cc);
+        if (empty($cc)) {
+            return [];
+        }
+        switch ($settings[BackendUtils::EML_ATT_CC_MODE] ?? 'cc') {
+            case 'separate':
+                return $cc;
+            case 'bcc':
+                $msg->setBcc($cc);
+                return [];
+            default:
+                $msg->setCc($cc);
+                return [];
+        }
+    }
+
+    /**
+     * Send each copy address an email of its own, after the attendee's went
+     * out. $fill sets everything but the recipient. One failure does not stop
+     * the rest.
+     *
+     * @param string[] $copies
+     */
+    private function sendAttendeeCopies($mailer, array $copies, \Closure $fill): void
+    {
+        foreach ($copies as $address) {
+            $copy = $mailer->createMessage();
+            $copy->setTo([$address]);
+            $fill($copy);
+            try {
+                $mailer->send($copy);
+            } catch (\Exception $e) {
+                $this->logger->error("Can not send attendee copy to " . $address . ": " . $e->getMessage());
+            }
         }
     }
 
