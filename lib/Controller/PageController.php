@@ -1111,6 +1111,9 @@ class PageController extends Controller
 
         $post['_page_id'] = $pageId;
         $post['_embed'] = $embed === true ? "1" : "0";
+        // for the team notice (attCcMode "separate"); getRemoteAddress honours trusted_proxies
+        $post['_client_ip'] = $this->request->getRemoteAddress();
+        $post['_user_agent'] = $this->request->getHeader('User-Agent');
         // Update/create appointment data
         $r = $this->bc->setAttendee($userId, $cal_id, $evt_uri, $post);
 

@@ -753,6 +753,9 @@ class DavListener implements IEventListener
 
         // Message the organizer
         $om_prefix = "";
+        // What happened, for the team notice sent to attCc addresses in "separate"
+        // mode. Set whatever the organizer notification settings are.
+        $state_label = "";
         // Description can get overwritten when the .ics attachment is constructed, so get it here
         if (isset($evt->DESCRIPTION)) {
             $om_info = $evt->DESCRIPTION->getValue();
@@ -808,8 +811,9 @@ class DavListener implements IEventListener
                 ]));
             }
 
+            $state_label = $organizerL10n->t("Appointment pending");
             if ($settings[BackendUtils::EML_MREQ]) {
-                $om_prefix = $organizerL10n->t("Appointment pending");
+                $om_prefix = $state_label;
             }
 
         } elseif ($hint === HintVar::APPT_CONFIRM) {
@@ -866,8 +870,9 @@ class DavListener implements IEventListener
                 ]));
             }
 
+            $state_label = $organizerL10n->t("Appointment confirmed");
             if ($settings[BackendUtils::EML_MCONF]) {
-                $om_prefix = $organizerL10n->t("Appointment confirmed");
+                $om_prefix = $state_label;
             }
 
             $ext_event_type = 0;
@@ -895,8 +900,9 @@ class DavListener implements IEventListener
             ]));
             $is_cancelled = true;
 
+            $state_label = $organizerL10n->t("Appointment canceled");
             if ($settings[BackendUtils::EML_MCNCL] && $hint !== HintVar::APPT_NONE) {
-                $om_prefix = $organizerL10n->t("Appointment canceled");
+                $om_prefix = $state_label;
             }
 
             if ($isDelete) {
@@ -954,8 +960,9 @@ class DavListener implements IEventListener
 
             $cnl_lnk_url = $btn_url . "0" . $btn_tkn;
 
+            $state_label = $organizerL10n->t("Appointment updated");
             if ($settings[BackendUtils::EML_MCONF]) {
-                $om_prefix = $organizerL10n->t("Appointment updated");
+                $om_prefix = $state_label;
             }
 
             $ext_event_type = 3;
@@ -1126,6 +1133,7 @@ class DavListener implements IEventListener
             $this->setFromAddress($msg, $userId, $org_email, $org_name, $settings);
             $msg->setTo([$to_email]);
             $copies = $this->addAttendeeCc($msg, $settings, $to_email);
+            $teamTmpl = empty($copies) ? null : $this->safeTeamNoticeTemplate($state_label, $to_name, $om_info, $evt, $doc, $utz, $settings, $organizerL10n);
             $msg->setHtmlBody($customHtml);
             $msg->setPlainTextBody($plainText);
             try {
@@ -1134,11 +1142,7 @@ class DavListener implements IEventListener
                 $this->logger->error("Can not send brand email to " . $to_email . ": " . $e->getMessage());
                 return;
             }
-            $this->sendAttendeeCopies($mailer, $copies, function ($copy) use ($userId, $org_email, $org_name, $settings, $customHtml, $plainText) {
-                $this->setFromAddress($copy, $userId, $org_email, $org_name, $settings);
-                $copy->setHtmlBody($customHtml);
-                $copy->setPlainTextBody($plainText);
-            });
+            $this->sendTeamNotices($mailer, $copies, $userId, $org_email, $org_name, $settings, $teamTmpl, $to_email);
             return;
         }
 
@@ -1152,8 +1156,9 @@ class DavListener implements IEventListener
 
         $msg->setTo(array($to_email));
         $copies = $this->addAttendeeCc($msg, $settings, $to_email);
+        // built now: the .ics step below strips properties the notice reads
+        $teamTmpl = empty($copies) ? null : $this->safeTeamNoticeTemplate($state_label, $to_name, $om_info, $evt, $doc, $utz, $settings, $organizerL10n);
         $this->useBrandedTemplate($msg, $tmpl, $settings);
-        $ics = null;
 
         if ($doc) {
             $utz_info = $doc->attendeeTimezone[0];
@@ -1256,8 +1261,13 @@ class DavListener implements IEventListener
                 $evt->remove($evt->{ApptDocProp::PROP_NAME});
             }
 
-            $ics = [$vObject->serialize(), 'text/calendar; method=' . $method];
-            $msg->attach($mailer->createAttachment($ics[0], 'appointment.ics', $ics[1]));
+            $msg->attach(
+                $mailer->createAttachment(
+                    $vObject->serialize(),
+                    'appointment.ics',
+                    'text/calendar; method=' . $method
+                )
+            );
         }
 
         try {
@@ -1267,13 +1277,7 @@ class DavListener implements IEventListener
             $this->logger->error($e->getMessage());
             return;
         }
-        $this->sendAttendeeCopies($mailer, $copies, function ($copy) use ($mailer, $userId, $org_email, $org_name, $settings, $tmpl, $ics) {
-            $this->setFromAddress($copy, $userId, $org_email, $org_name, $settings);
-            $this->useBrandedTemplate($copy, $tmpl, $settings);
-            if ($ics !== null) {
-                $copy->attach($mailer->createAttachment($ics[0], 'appointment.ics', $ics[1]));
-            }
-        });
+        $this->sendTeamNotices($mailer, $copies, $userId, $org_email, $org_name, $settings, $teamTmpl, $to_email);
 
         // Email the Organizer
         if (!empty($om_prefix) && isset($om_info)) {
@@ -1699,7 +1703,7 @@ class DavListener implements IEventListener
     /**
      * Copy the page's attCc addresses on an attendee email, as Cc or Bcc per
      * attCcMode. In "separate" mode nothing is added and the addresses are
-     * returned for sendAttendeeCopies; otherwise the result is empty. An invalid
+     * returned for sendTeamNotices; otherwise the result is empty. An invalid
      * stored list (set before validation existed) is logged and skipped rather
      * than blocking the attendee's email.
      *
@@ -1733,22 +1737,75 @@ class DavListener implements IEventListener
     }
 
     /**
-     * Send each copy address an email of its own, after the attendee's went
-     * out. $fill sets everything but the recipient. One failure does not stop
+     * The notice the attCc addresses get in "separate" mode: what happened, when,
+     * every detail the attendee entered, the page, and where the booking came
+     * from (IP and browser, recorded at booking time). It is for the team, so
+     * unlike the attendee's email it holds everything.
+     */
+    private function teamNoticeTemplate(string $state, string $to_name, string $info, $evt, ?ApptDocProp $doc, \DateTimeZone $utz, array $settings, $l10n)
+    {
+        $utils = $this->utils;
+        $tzi = ($doc ? $doc->attendeeTimezone : $evt->{BackendUtils::TZI_PROP}->getValue())[0] . $utz->getName();
+        $start = $evt->DTSTART->getDateTime();
+        $tmpl = $this->getEmailTemplate();
+        $tmpl->setSubject(($state !== '' ? $state . ": " : "") . $to_name . ", "
+            . $utils->getDateTimeString($start, $tzi, 1, $l10n));
+        $tmpl->addHeading(" ");
+        if ($state !== '') {
+            $tmpl->addBodyText(...$this->formatEmailBodyHtml([$state]));
+        }
+        $tmpl->addBodyListItem(...$this->formatEmailListItem($utils->getDateTimeString($start, $tzi, 0, $l10n)));
+        $n = 0;
+        foreach (explode("\n", $info) as $line) {
+            if (strlen($line) > 2 && $n++ < 32) {
+                $tmpl->addBodyListItem(...$this->formatEmailListItem($this->linkify->process($line)));
+            }
+        }
+        if (!empty($settings[BackendUtils::PAGE_LABEL])) {
+            $tmpl->addBodyListItem(...$this->formatEmailListItem($l10n->t('Form: %s', [$settings[BackendUtils::PAGE_LABEL]])));
+        }
+        if ($doc && $doc->clientIp !== '') {
+            $tmpl->addBodyListItem(...$this->formatEmailListItem($l10n->t('Booked from IP: %s', [$doc->clientIp])));
+        }
+        if ($doc && $doc->userAgent !== '') {
+            $tmpl->addBodyListItem(...$this->formatEmailListItem($l10n->t('Browser: %s', [$doc->userAgent])));
+        }
+        return $tmpl;
+    }
+
+    /** teamNoticeTemplate, but a failure is logged and never blocks the attendee's email. */
+    private function safeTeamNoticeTemplate(...$args)
+    {
+        try {
+            return $this->teamNoticeTemplate(...$args);
+        } catch (\Throwable $e) {
+            $this->logger->error("appointments: team notice not built: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Send each copy address the team notice, one email per address, after the
+     * attendee's went out. Replies go to the attendee. One failure does not stop
      * the rest.
      *
      * @param string[] $copies
      */
-    private function sendAttendeeCopies($mailer, array $copies, \Closure $fill): void
+    private function sendTeamNotices($mailer, array $copies, string $userId, string $org_email, string $org_name, array $settings, $tmpl, string $to_email): void
     {
+        if (empty($copies) || $tmpl === null) {
+            return;
+        }
         foreach ($copies as $address) {
-            $copy = $mailer->createMessage();
-            $copy->setTo([$address]);
-            $fill($copy);
+            $msg = $mailer->createMessage();
+            $this->setFromAddress($msg, $userId, $org_email, $org_name, $settings);
+            $msg->setReplyTo([$to_email]);
+            $msg->setTo([$address]);
+            $this->useBrandedTemplate($msg, $tmpl, $settings);
             try {
-                $mailer->send($copy);
+                $mailer->send($msg);
             } catch (\Exception $e) {
-                $this->logger->error("Can not send attendee copy to " . $address . ": " . $e->getMessage());
+                $this->logger->error("Can not send team notice to " . $address . ": " . $e->getMessage());
             }
         }
     }

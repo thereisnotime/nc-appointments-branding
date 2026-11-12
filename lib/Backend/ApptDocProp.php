@@ -21,6 +21,9 @@ class ApptDocProp extends PropEncoderBase
     public bool $inPersonType = false;
     public string $attendeeTimezone = 'UTC';
     public string $description = '';
+    // Where the booking came from, recorded when the attendee books (team notices)
+    public string $clientIp = '';
+    public string $userAgent = '';
 
     public string $_evtUid = '';
     private array $_defaults = [];

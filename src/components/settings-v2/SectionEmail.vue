@@ -74,7 +74,7 @@ const cancelPendingOptions = [
 				:options="attCcModeOptions"
 				:store="settingsStore">
 			<template #help>
-				{{ t('appointments', 'Cc: on the attendee\'s email, which shows these addresses. Bcc: on the attendee\'s email, hidden from the attendee. Separate email: each address gets its own copy and the attendee\'s email does not mention them.') }}
+				{{ t('appointments', 'Cc: on the attendee\'s email, which shows these addresses. Bcc: on the attendee\'s email, hidden from the attendee. Separate email: each address gets its own notice with every booking detail (answers, form, IP and browser), and the attendee\'s email does not mention them.') }}
 			</template>
 		</ComboSelect>
 		<ComboInput

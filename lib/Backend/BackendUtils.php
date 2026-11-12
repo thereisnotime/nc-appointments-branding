@@ -398,6 +398,8 @@ class BackendUtils
         $doc->inPersonType = isset($info['type_override']);
         // original description
         $doc->description = $dsr;
+        $doc->clientIp = substr($info['_client_ip'] ?? '', 0, 64);
+        $doc->userAgent = substr($info['_user_agent'] ?? '', 0, 300);
         // -----
 
         $this->setSEQ($evt);
