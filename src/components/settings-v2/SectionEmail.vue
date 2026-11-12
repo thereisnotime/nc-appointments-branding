@@ -122,7 +122,7 @@ const cancelPendingOptions = [
 				:label="t('appointments', 'Webhook signing secret')"
 				:store="settingsStore">
 			<template #help>
-				{{ t('appointments', 'Optional. When set, each request carries X-Appointments-Signature: sha256=<hex HMAC-SHA256 of the body> so the receiver can check it came from here.') }}
+				{{ t('appointments', 'Optional. When set, each request carries X-Appointments-Signature: sha256=(hex HMAC-SHA256 of the body), so the receiver can check it came from here.') }}
 			</template>
 		</ComboInput>
 		<LabelAccordion
